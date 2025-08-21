@@ -124,6 +124,12 @@ variable "vm_nameserver" {
   type        = string
 }
 
+# Provide the location of the place where assets will be stored
+variable "asset_path" {
+  type        = string
+  default     = "build"
+}
+
 # Directory to create files in
 variable "created_files_dir" {
   type        = string
