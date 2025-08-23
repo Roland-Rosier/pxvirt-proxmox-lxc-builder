@@ -11,4 +11,4 @@ That is what this [Tofu](https://opentofu.org/) build does:
 
 1. Switches networking to use ifupdown2.
 2. Disables IPV6 (because that caused me weird errors).
-3. Installed and enables SSH (because that allows further configuration).
+3. Installed and enables ssh (because that include sshd and allows further configuration).
