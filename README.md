@@ -1,6 +1,6 @@
 # Tofu (open source port of Terraform) configuration to build a various Pxvirt / Proxmox lxc images
 
-The container images provided by [Pxvirt](https://github.com/jiangcuo/pxvirt/tree/pxvirt) at [https://download.lierfang.com/pxcloud/pxvirt/lxcs/](https://download.lierfang.com/pxcloud/pxvirt/lxcs/) are not that recenti (as of 2025/08/23, they were from 2023). 
+The container images provided by [Pxvirt](https://github.com/jiangcuo/pxvirt/tree/pxvirt) at [https://download.lierfang.com/pxcloud/pxvirt/lxcs/](https://download.lierfang.com/pxcloud/pxvirt/lxcs/) are not that recent (as of 2025/08/23, they were from 2023). 
 
 The container images provided through the ARM Pimox scripts at [https://pimox-scripts.vercel.app/scripts](https://pimox-scripts.vercel.app/scripts) e.g. for Debian [https://api.github.com/repos/asylumexp/debian-ifupdown2-lxc/releases/latest](https://api.github.com/repos/asylumexp/debian-ifupdown2-lxc/releases/latest) are also not that recent (as of 2025/08/23, they were from 2024/06/07).
 
@@ -10,7 +10,7 @@ From a security perspective, this is less-than-ideal (vulnerabilities could cree
 
 So it would be ideal to have relatively recent images.
 
-There are potentially recent images available from the distributions themselves, e.g. the Debian Official Cloud Images at (https://cloud.debian.org/images/cloud/)[https://cloud.debian.org/images/cloud/]. But the configurations and availability of these could differ between vendors, so they might not provide a stable base to install further software on.
+There are potentially recent images available from the distributions themselves, e.g. the Debian Official Cloud Images at [https://cloud.debian.org/images/cloud/](https://cloud.debian.org/images/cloud/). But the configurations and availability of these could differ between vendors, so they might not provide a stable base to install further software on.
 
 However, Linux Containers provides a set of recent images at
 [https://images.linuxcontainers.org/](https://images.linuxcontainers.org/),

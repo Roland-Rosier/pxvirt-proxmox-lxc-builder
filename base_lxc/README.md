@@ -7,7 +7,7 @@ Neither of these work with Pxvirt / Proxmox as Pxvirt / Proxmox can't configure 
 
 So, these images need to be adjusted to work with PXVIRT / Proxmox.
 
-That is what this build does:
+That is what this [Tofu](https://opentofu.org/) build does:
 
 1. Switches networking to use ifupdown2.
 2. Disables IPV6 (because that caused me weird errors).
