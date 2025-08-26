@@ -1,0 +1,102 @@
+locals {
+  # Create the CT template name that we are looking for
+  ct_template_name                = chomp(templatefile("${path.module}/ct_template_name.tftpl", {
+    containers_base_name          = var.containers_base_name
+    containers_dist_name          = var.containers_dist_name
+    containers_release_name       = var.containers_release_name
+    containers_arch_name          = var.containers_arch_name
+    containers_variant_name       = "${var.containers_variant_name}-base"
+    containers_date               = "${var.containers_base_date}-${var.containers_update_date}"
+    containers_lxc_name           = var.containers_lxc_name
+    containers_lxc_name_extension = var.containers_lxc_name_extension
+  }))
+
+  # Calculate today's date
+  today_date                      = formatdate("YYYYMMDD", timestamp())
+
+  # Create the CT template name that we are creating
+  ct_created_template_basename    = chomp(templatefile("${path.module}/ct_template_name.tftpl", {
+    containers_base_name          = var.containers_base_name
+    containers_dist_name          = var.containers_dist_name
+    containers_release_name       = var.containers_release_name
+    containers_arch_name          = var.containers_arch_name
+    containers_variant_name       = "${var.containers_variant_name}-base"
+    containers_date               = "${var.containers_base_date}-${local.today_date}"
+    containers_lxc_name           = var.containers_lxc_name
+    containers_lxc_name_extension = ""
+  }))
+
+  ct_created_template_name        = "${local.ct_created_template_basename}.tar.xz"
+
+  # Note, possibly the templatestring function would be more appropriate:
+  # https://developer.hashicorp.com/terraform/language/functions/templatestring
+
+  ssh_public_key_root            = chomp(file("/root/.ssh/id_ed25519.pub"))
+}
+
+
+resource "proxmox_lxc" "my_lxc" {
+  # depends_on       = [
+  #   proxmox_virtual_environment_download_file.source_container
+  # ]
+  hostname         = var.target_name
+  target_node      = var.iac_host_node
+  ostemplate       = "${var.template_storage}:vztmpl/${local.ct_template_name}"
+  password         = var.root_password
+  unprivileged     = true
+  cores            = 1
+  memory           = 2048
+  swap             = 4096
+  nameserver       = "${var.vm_nameserver}"
+  tags             = "terraform;test"
+  vmid             = var.vm_id
+  hastate          = "started"
+
+  ssh_public_keys  = local.ssh_public_key_root
+
+  rootfs {
+    storage        = var.lxc_storage
+    size           = "8G"
+  }
+
+  network {
+    name           = var.nic_name
+    bridge         = var.bridge_name
+    # To create an image from one of the linuxcontainers built images,
+    # * Enable only one network
+    # * Leave the ip field empty
+    # * Leave the gw field empty as well
+    ip             = var.vm_ipv4_cidr
+    gw             = var.vm_gw4
+    ip6            = ""
+  }
+
+  features {
+    // fuse       = true
+    nesting        = true
+    // keyctl     = true
+  }
+}
+
+resource "terraform_data" "create_files" {
+
+  triggers_replace = [
+    # timestamp()
+    proxmox_lxc.my_lxc.id
+  ]
+
+  provisioner "local-exec" {
+    command        = "cd ansible && ansible-playbook upgrade.yaml"
+  }
+}
+
+# resource "ansible_playbook" "playbook" {
+
+#  depends_on = [
+    # timestamp()
+#    proxmox_lxc.my_lxc
+#  ]
+
+#  playbook = "./ansible/upgrade.yaml"
+#  name     = "localhost"
+#}
