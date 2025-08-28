@@ -1,0 +1,181 @@
+---
+# - hosts: server
+#   gather_facts: no
+#   tasks:
+#     - name: Wait for the system to become reacable
+#       ansible.builtin.wait_for_connection:
+#     - name: Gather facts for the first time
+#       ansible.builtin.setup:
+
+- name: Update known_hosts file
+  hosts: localhost
+  connection: local
+  become: true
+
+  vars:
+    ssh_known_hosts_command: "ssh-keyscan -T 30"
+    ssh_known_hosts_file: "{{ lookup('env', 'HOME') + '/.ssh/known_hosts' }}"
+    # ssh_known_hosts_file: "{{ '~/.ssh/known_hosts' }}"
+    # ssh_known_hosts: "{{ groups['all'] }}"
+    # ssh_known_hosts: "{{ groups['test_servers'] | map('extract', hostvars, ['ansible_host']) | join(',') }}"
+    ssh_known_hosts: [ '192.168.177.42' ]
+
+  tasks:
+    - name: For each hosts, scan for its ssh public key
+      # ansible.builtin.shell: "{{ ssh_known_hosts_command }} {{ item }},`dig +short {{ item }}`"
+      ansible.builtin.shell: "{{ ssh_known_hosts_command }} {{ item }}"
+      with_items: "{{ ssh_known_hosts }}"
+      register: ssh_known_host_results
+      ignore_errors: true
+      changed_when: false
+
+    - name: Add/update the public key in the '{{ ssh_known_hosts_file }}'
+      ansible.builtin.known_hosts:
+        name: "{{ item.item }}"
+        key: "{{ item.stdout }}"
+        path: "{{ ssh_known_hosts_file }}"
+      with_items: "{{ ssh_known_host_results.results }}"
+
+# - hosts: localhost
+#  gather_facts: false
+#  become: true
+#  tasks:
+#    - name: Remove any previous version of the key from the known hosts file
+##      ansible.builtin.known_hosts:
+##        path: ~/.ssh/known_hosts
+##        name: 192.168.177.42
+##        state: absent
+##      delegate_to: localhost
+#      ansible.builtin.shell: ssh-keygen -R 192.168.177.42 || true
+#    - name: Ensure filesystem is sync'd
+#      ansible.builtin.shell: sync && sleep 10
+#    - name: Find out who I am
+#      ansible.builtin.shell: whoami
+#    - name: Build the known hosts file
+#      ansible.builtin.shell: ssh-keyscan -T 10 192.168.177.42 >> ~/.ssh/known_hosts
+##      register: keyscan_key
+
+- hosts: server
+  become: true
+  become_user: root
+  tasks:
+    - name: Upgrade apt repo and cache on Debian box
+      when: ansible_os_family == "Debian"
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+    - name: Upgrade all packages on Debian servers
+      when: ansible_os_family == "Debian"
+      apt: upgrade=yes force_apt_get=yes
+    - name: Check if a reboot is required
+      register: reboot_required_file
+      stat: path=/var/run/reboot-required get_md5=no
+    - name: Reboot the box if kernel updated
+      reboot:
+        msg: "Reboot initiated by Ansible for kernel updates"
+        connect_timeout: 5
+        reboot_timeout: 90
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: uptime
+      when: reboot_required_file.stat.exists
+
+- hosts: server
+  become: true
+  become_user: root
+  tasks:
+    - name: Retrieve Ansible key and add repo
+      when: ansible_os_family == "Debian"
+      block:
+        - name: Retrieve Ansible apt-key
+          ansible.builtin.get_url:
+            url: https://keyserver.ubuntu.com/pks/lookup?fingerprint=on&op=get&search=0x6125E2A8C77F2818FB7BD15B93C4A3FD7BB9C367
+# It appears from https://github.com/ansible/ansible/issues/78063#issuecomment-1210837515 that apt
+# will accept these files without dearmoring them, as long as the extension is .asc
+            dest: /etc/apt/keyrings/ansible-archive-keyring.asc
+            mode: '0644'
+            force: true
+        - name: Add Ansible repository to apt
+# For Debian 12, use the Ubuntu codename of jammy to get the latest distribution
+          ansible.builtin.apt_repository:
+            repo: "deb [signed-by=/etc/apt/keyrings/ansible-archive-keyring.asc] http://ppa.launchpad.net/ansible/ansible/ubuntu jammy main"
+        - name: Update apt cache with Ansible repository
+          apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+        - name: Install Ansible
+          apt:
+            name:
+              - ansible
+              - ansible-lint
+    - name: Reboot the box if kernel updated
+      reboot:
+        msg: "Reboot initiated by Ansible for kernel updates"
+        connect_timeout: 5
+        reboot_timeout: 90
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: uptime
+      when: reboot_required_file.stat.exists
+
+- hosts: server
+  become: true
+  become_user: root
+  tasks:
+    - name: Retrieve OpenTofu key and add repo
+      when: ansible_os_family == "Debian"
+      block:
+        - name: Retrieve OpenTofu apt-key
+          ansible.builtin.get_url:
+            url: https://get.opentofu.org/opentofu.gpg
+# It appears from https://github.com/ansible/ansible/issues/78063#issuecomment-1210837515 that apt
+# will accept these files without dearmoring them, as long as the extension is .asc
+            dest: /etc/apt/keyrings/opentofu.asc
+            mode: '0644'
+            force: true
+        - name: Retrieve OpenTofu packages apt-key
+          ansible.builtin.get_url:
+            url: https://packages.opentofu.org/opentofu/tofu/gpgkey
+# It appears from https://github.com/ansible/ansible/issues/78063#issuecomment-1210837515 that apt
+# will accept these files without dearmoring them, as long as the extension is .asc
+            dest: /etc/apt/keyrings/opentofu-repo.asc
+            mode: '0644'
+            force: true
+        - name: Add OpenTofu repository to apt
+          ansible.builtin.apt_repository:
+            repo: "deb [signed-by=/etc/apt/keyrings/opentofu.asc,/etc/apt/keyrings/opentofu-repo.asc] https://packages.opentofu.org/opentofu/tofu/any/ any main"
+        - name: Add OpenTofu source repository to apt
+          ansible.builtin.apt_repository:
+            repo: "deb-src [signed-by=/etc/apt/keyrings/opentofu.asc,/etc/apt/keyrings/opentofu-repo.asc] https://packages.opentofu.org/opentofu/tofu/any/ any main"
+        - name: Update apt cache with OpenTofu repository
+          apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+        - name: Install OpenTofu
+          ansible.builtin.apt:
+            name:
+              - tofu
+        - name: Reboot the box if kernel updated
+          reboot:
+            msg: "Reboot initiated by Ansible for kernel updates"
+            connect_timeout: 5
+            reboot_timeout: 90
+            pre_reboot_delay: 0
+            post_reboot_delay: 30
+            test_command: uptime
+          when: reboot_required_file.stat.exists
+
+- hosts: server
+  become: true
+  become_user: root
+  tasks:
+    - name: Tidy up after yourself
+      when: ansible_os_family == "Debian"
+      block:
+        - name: apt clean and autoremove
+          ansible.builtin.apt:
+            clean: true
+            autoremove: true
+        - name: Reboot the box if kernel updated
+          reboot:
+            msg: "Reboot initiated by Ansible for kernel updates"
+            connect_timeout: 5
+            reboot_timeout: 90
+            pre_reboot_delay: 0
+            post_reboot_delay: 30
+            test_command: uptime
+          when: reboot_required_file.stat.exists

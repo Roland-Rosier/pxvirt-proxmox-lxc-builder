@@ -1,0 +1,22 @@
+# Tofu configuration to build a base image
+
+The Linux Container images [https://images.linuxcontainers.org/](https://images.linuxcontainers.org/)
+rely on Cloud Init to be initialised and use systemd-networkd as the network settings manager.
+
+Neither of these work with Pxvirt / Proxmox as Pxvirt / Proxmox can't configure LXCs with cloud init and it uses ifupdown2 to control the networking,
+
+So, these images need to be adjusted to work with PXVIRT / Proxmox.
+
+That is what this [Tofu](https://opentofu.org/) build does:
+
+1. Switches networking to use ifupdown2.
+2. Disables IPV6 (because that caused me weird errors).
+3. Installed and enables ssh (because that include sshd and allows further configuration).
+
+To create the image, setup the variable files as desired and run the command:
+
+'''console
+$ tofu init
+$ TF_VAR_root_password='' tofu plan --var-file="ip_addrs.tfvars"
+$ TF_VAR_root_password='' tofu apply -var-file="ip_addrs.tfvars"
+'''
