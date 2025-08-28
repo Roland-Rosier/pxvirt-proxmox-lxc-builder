@@ -28,13 +28,14 @@ locals {
   # Create the storage name of the provisioning snippet
   stored_provision_snippet        = "${var.target_name}-${var.provision_script_base_name}"
 
-  # Create the snippet fully-qualified path in the storate
+  # Create the snippet fully-qualified path in the storage
   stored_provision_snippet_path   = chomp(templatefile("${path.module}/snippet_loc.tftpl", {
     template_storage_location     = var.template_storage_location
     template_storage              = var.template_storage
     snippet_name                  = local.stored_provision_snippet
   }))
 
+  # Define the location where the backup processing is performed
   backup_location = chomp(templatefile("${path.module}/download_base_image_loc.tftpl", {
     template_storage_location     = var.template_storage_location
     template_storage              = var.template_storage

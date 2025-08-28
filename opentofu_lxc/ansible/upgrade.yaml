@@ -1,16 +1,59 @@
 ---
-- hosts: localhost
-  gather_facts: false
+# - hosts: server
+#   gather_facts: no
+#   tasks:
+#     - name: Wait for the system to become reacable
+#       ansible.builtin.wait_for_connection:
+#     - name: Gather facts for the first time
+#       ansible.builtin.setup:
+
+- name: Update known_hosts file
+  hosts: localhost
+  connection: local
+  become: true
+
+  vars:
+    ssh_known_hosts_command: "ssh-keyscan -T 30"
+    ssh_known_hosts_file: "{{ lookup('env', 'HOME') + '/.ssh/known_hosts' }}"
+    # ssh_known_hosts_file: "{{ '~/.ssh/known_hosts' }}"
+    # ssh_known_hosts: "{{ groups['all'] }}"
+    # ssh_known_hosts: "{{ groups['test_servers'] | map('extract', hostvars, ['ansible_host']) | join(',') }}"
+    ssh_known_hosts: [ '192.168.177.42' ]
+
   tasks:
-    - name: Remove any previous version of the key from the known hosts file
+    - name: For each hosts, scan for its ssh public key
+      # ansible.builtin.shell: "{{ ssh_known_hosts_command }} {{ item }},`dig +short {{ item }}`"
+      ansible.builtin.shell: "{{ ssh_known_hosts_command }} {{ item }}"
+      with_items: "{{ ssh_known_hosts }}"
+      register: ssh_known_host_results
+      ignore_errors: true
+      changed_when: false
+
+    - name: Add/update the public key in the '{{ ssh_known_hosts_file }}'
       ansible.builtin.known_hosts:
-        path: ~/.ssh/known_hosts
-        name: 192.168.177.42
-        state: absent
-      delegate_to: localhost
-    - name: Build the known hosts file
-      ansible.builtin.shell: ssh-keyscan 192.168.177.42 >> ~/.ssh/known_hosts
-      register: keyscan_key
+        name: "{{ item.item }}"
+        key: "{{ item.stdout }}"
+        path: "{{ ssh_known_hosts_file }}"
+      with_items: "{{ ssh_known_host_results.results }}"
+
+# - hosts: localhost
+#  gather_facts: false
+#  become: true
+#  tasks:
+#    - name: Remove any previous version of the key from the known hosts file
+##      ansible.builtin.known_hosts:
+##        path: ~/.ssh/known_hosts
+##        name: 192.168.177.42
+##        state: absent
+##      delegate_to: localhost
+#      ansible.builtin.shell: ssh-keygen -R 192.168.177.42 || true
+#    - name: Ensure filesystem is sync'd
+#      ansible.builtin.shell: sync && sleep 10
+#    - name: Find out who I am
+#      ansible.builtin.shell: whoami
+#    - name: Build the known hosts file
+#      ansible.builtin.shell: ssh-keyscan -T 10 192.168.177.42 >> ~/.ssh/known_hosts
+##      register: keyscan_key
 
 - hosts: server
   become: true
@@ -103,15 +146,36 @@
         - name: Update apt cache with OpenTofu repository
           apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
         - name: Install OpenTofu
-          apt:
+          ansible.builtin.apt:
             name:
               - tofu
-    - name: Reboot the box if kernel updated
-      reboot:
-        msg: "Reboot initiated by Ansible for kernel updates"
-        connect_timeout: 5
-        reboot_timeout: 90
-        pre_reboot_delay: 0
-        post_reboot_delay: 30
-        test_command: uptime
-      when: reboot_required_file.stat.exists
+        - name: Reboot the box if kernel updated
+          reboot:
+            msg: "Reboot initiated by Ansible for kernel updates"
+            connect_timeout: 5
+            reboot_timeout: 90
+            pre_reboot_delay: 0
+            post_reboot_delay: 30
+            test_command: uptime
+          when: reboot_required_file.stat.exists
+
+- hosts: server
+  become: true
+  become_user: root
+  tasks:
+    - name: Tidy up after yourself
+      when: ansible_os_family == "Debian"
+      block:
+        - name: apt clean and autoremove
+          ansible.builtin.apt:
+            clean: true
+            autoremove: true
+        - name: Reboot the box if kernel updated
+          reboot:
+            msg: "Reboot initiated by Ansible for kernel updates"
+            connect_timeout: 5
+            reboot_timeout: 90
+            pre_reboot_delay: 0
+            post_reboot_delay: 30
+            test_command: uptime
+          when: reboot_required_file.stat.exists

@@ -20,7 +20,7 @@ variable "containers_variant_name" {
 }
 
 variable "containers_date" {
-  default = "20250824"
+  default = "20250828"
 }
 
 variable "containers_time" {

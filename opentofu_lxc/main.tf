@@ -20,7 +20,7 @@ locals {
     containers_dist_name          = var.containers_dist_name
     containers_release_name       = var.containers_release_name
     containers_arch_name          = var.containers_arch_name
-    containers_variant_name       = "${var.containers_variant_name}-base"
+    containers_variant_name       = "${var.containers_variant_name}-opentofu"
     containers_date               = "${var.containers_base_date}-${local.today_date}"
     containers_lxc_name           = var.containers_lxc_name
     containers_lxc_name_extension = ""
@@ -34,11 +34,22 @@ locals {
   ssh_public_key_root            = chomp(file("/root/.ssh/id_ed25519.pub"))
 }
 
+resource "terraform_data" "ensure_iac_host_present_in_known_hosts" {
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      ssh-keygen -R ${var.iac_host_ip} || true
+      ssh-keyscan ${var.iac_host_ip} >> ~/.ssh/known_hosts
+    EOT
+  }
+
+}
 
 resource "proxmox_lxc" "my_lxc" {
-  # depends_on       = [
+  depends_on       = [
   #   proxmox_virtual_environment_download_file.source_container
-  # ]
+    terraform_data.ensure_iac_host_present_in_known_hosts
+  ]
   hostname         = var.target_name
   target_node      = var.iac_host_node
   ostemplate       = "${var.template_storage}:vztmpl/${local.ct_template_name}"
@@ -78,11 +89,44 @@ resource "proxmox_lxc" "my_lxc" {
   }
 }
 
-resource "terraform_data" "create_files" {
+resource "terraform_data" "wait_for_guest_to_start" {
+
+  triggers_replace = [
+    proxmox_lxc.my_lxc.id
+  ]
+
+  # Remote exec probably won't work in guest because there is no SSH in guest
+  # so use remote exec on host and pct
+  connection {
+    type           = "ssh"
+    user           = "root"
+    private_key    = file("~/.ssh/id_ed25519")
+    host           = var.iac_host_ip
+  }
+
+  # Split these commands up to try and reduce the potential for
+  # timeouts with multiple long compression calls
+
+#      "pct shutdown ${var.vm_id}",
+#      "mkdir -p ${local.backup_location}",
+#      "rm -f ${local.backup_location}/*",
+#      "vzdump ${var.vm_id} --mode stop --compress gzip --dumpdir ${local.backup_location}",
+  provisioner "remote-exec" {
+    inline         = [
+      "#!/bin/bash",
+      "lxc-wait --name=${var.vm_id} --state=RUNNING",
+      "pct exec ${var.vm_id} -- bash -c 'while ! systemctl is-system-running | grep -qE \"running|degraded\" ; do sleep 1; done'",
+      "sleep 20"
+    ]
+  }
+}
+
+resource "terraform_data" "install_packages" {
 
   triggers_replace = [
     # timestamp()
-    proxmox_lxc.my_lxc.id
+    # proxmox_lxc.my_lxc.id
+    terraform_data.wait_for_guest_to_start.id
   ]
 
   provisioner "local-exec" {

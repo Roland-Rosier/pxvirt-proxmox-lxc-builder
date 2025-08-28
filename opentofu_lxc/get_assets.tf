@@ -12,6 +12,11 @@ resource "terraform_data" "extract_files" {
   triggers_replace = [
     timestamp(),
     terraform_data.test_vm.id
+    # terraform_data.shutdown_guest_and_backup.id
+  ]
+
+  depends_on = [
+    terraform_data.shutdown_guest_and_backup
   ]
 
   provisioner "local-exec" {

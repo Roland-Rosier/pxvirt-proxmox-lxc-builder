@@ -100,6 +100,10 @@ variable "vm_ipv4_cidr" {
   type        = string
 }
 
+variable "vm_ipv4" {
+  type        = string
+}
+
 # Provide the IPV4(CIDR) of the LXC / VM itself - used when testing the template
 # Not sensitive, but changes, so pass in as an env var, or in a .tfvars file
 variable "vm_ipv4_cidr_test" {
