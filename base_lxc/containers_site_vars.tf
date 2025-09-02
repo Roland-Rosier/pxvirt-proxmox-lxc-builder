@@ -20,11 +20,11 @@ variable "containers_variant_name" {
 }
 
 variable "containers_date" {
-  default = "20250828"
+  default = "20250829"
 }
 
 variable "containers_time" {
-  default = "05:24"
+  default = "05:44"
 }
 
 variable "containers_lxc_name" {

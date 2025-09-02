@@ -13,7 +13,17 @@
   become: true
 
   vars:
-    ssh_known_hosts_command: "ssh-keyscan -T 30"
+    # NOTE:
+    # ssh-keyscan does not seem to operate consistently
+    # - The timeout parameter doesn't seem to work reliably
+    # - Some variants of ssh-keyscan output the comments on stderr *and don't have a -q parameter*
+    # - Some variants of ssh-keyscan output the comments on stdout *and do have a -q parameter to suppress comments*
+    # - But the variants which output comments on stderr fail if "-q" is passed as a parameter
+    # So the only way to deal with this difference is to pipe stderr to /dev/null in case that is the variant\
+    # and at least that command succeeds with no errors coming through on stderr
+    # ssh_known_hosts_command: "ssh-keyscan -T 30"
+    # ssh_known_hosts_command: "ssh-keyscan -q -4"
+    ssh_known_hosts_command: "ssh-keyscan -4"
     ssh_known_hosts_file: "{{ lookup('env', 'HOME') + '/.ssh/known_hosts' }}"
     # ssh_known_hosts_file: "{{ '~/.ssh/known_hosts' }}"
     # ssh_known_hosts: "{{ groups['all'] }}"
@@ -23,11 +33,14 @@
   tasks:
     - name: For each hosts, scan for its ssh public key
       # ansible.builtin.shell: "{{ ssh_known_hosts_command }} {{ item }},`dig +short {{ item }}`"
-      ansible.builtin.shell: "{{ ssh_known_hosts_command }} {{ item }}"
+      # ansible.builtin.shell: "{{ ssh_known_hosts_command }} {{ item }}"
+      ansible.builtin.shell: "count=0 && while [[ $count -lt 10 ]] ; do {{ ssh_known_hosts_command }} {{ item }} 2> /dev/null && break; count=$((count+1)); done"
       with_items: "{{ ssh_known_hosts }}"
       register: ssh_known_host_results
       ignore_errors: true
       changed_when: false
+      args:
+        executable: /bin/bash
 
     - name: Add/update the public key in the '{{ ssh_known_hosts_file }}'
       ansible.builtin.known_hosts:
@@ -65,9 +78,15 @@
     - name: Upgrade all packages on Debian servers
       when: ansible_os_family == "Debian"
       apt: upgrade=yes force_apt_get=yes
+    - name: Install other misc packages
+      when: ansible_os_family == "Debian"
+      apt:
+        name:
+          - zip
+          - jq
     - name: Check if a reboot is required
       register: reboot_required_file
-      stat: path=/var/run/reboot-required get_md5=no
+      stat: path=/var/run/reboot-required get_checksum=false
     - name: Reboot the box if kernel updated
       reboot:
         msg: "Reboot initiated by Ansible for kernel updates"
