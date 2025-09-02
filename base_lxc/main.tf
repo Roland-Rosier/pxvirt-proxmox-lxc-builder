@@ -15,15 +15,17 @@ locals {
   }))
 
   # Create the CT template name that we are looking for
-  ct_template_name                = chomp(templatefile("${path.module}/ct_template_name.tftpl", {
+  ct_template_basename            = chomp(templatefile("${path.module}/ct_template_name.tftpl", {
     containers_dist_name          = var.containers_dist_name
     containers_release_name       = var.containers_release_name
     containers_arch_name          = var.containers_arch_name
     containers_variant_name       = var.containers_variant_name
     containers_date               = var.containers_date
     containers_lxc_name           = var.containers_lxc_name
-    containers_lxc_name_extension = var.containers_lxc_name_extension
+    containers_lxc_name_extension = ""
   }))
+
+  ct_template_name                = "${local.ct_template_basename}${var.containers_lxc_name_extension}"
 
   # Create the storage name of the provisioning snippet
   stored_provision_snippet        = "${var.target_name}-${var.provision_script_base_name}"
@@ -56,7 +58,7 @@ locals {
     containers_lxc_name_extension = ""
   }))
 
-  ct_created_template_name        = "${local.ct_created_template_basename}.tar.xz"
+  ct_created_template_name        = "${local.ct_created_template_basename}${var.containers_lxc_name_extension}"
 
   # Note, possibly the templatestring function would be more appropriate:
   # https://developer.hashicorp.com/terraform/language/functions/templatestring

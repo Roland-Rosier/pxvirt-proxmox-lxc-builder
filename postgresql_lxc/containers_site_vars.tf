@@ -40,7 +40,7 @@ variable "containers_update_date" {
 
 variable "this_build_variant_name" {
   type = string
-  default = "opentofu"
+  default = "postgresql-15"
 }
 
 variable "containers_lxc_name" {

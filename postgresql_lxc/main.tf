@@ -119,12 +119,31 @@ resource "terraform_data" "wait_for_guest_to_start" {
   }
 }
 
+resource "local_file" "tf_ansible_vars_file" {
+
+  depends_on = [
+    terraform_data.wait_for_guest_to_start
+  ]
+
+  # triggers_replace = [
+  #   terraform_data.wait_for_guest_to_start.id
+  # ]
+
+  content = <<-DOC
+    # Ansible vars generated containing variable values from Tofu
+
+    tf_ansible_build_host_var: ${var.vm_ipv4}
+  DOC
+  filename = "./ansible/tf_ansible_vars_file.yml"
+}
+
 resource "terraform_data" "install_packages" {
 
   triggers_replace = [
     # timestamp()
     # proxmox_lxc.my_lxc.id
-    terraform_data.wait_for_guest_to_start.id
+    # terraform_data.wait_for_guest_to_start.id
+    local_file.tf_ansible_vars_file.id
   ]
 
   provisioner "local-exec" {
