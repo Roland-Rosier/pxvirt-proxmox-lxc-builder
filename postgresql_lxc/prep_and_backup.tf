@@ -60,9 +60,9 @@ resource "terraform_data" "shutdown_guest_and_backup" {
       "lxc-wait --name=${var.vm_id} --state=STOPPED",
       "mkdir -p ${local.backup_location}",
       "rm -f ${local.backup_location}/*",
-      "vzdump ${var.vm_id} --mode stop --dumpdir ${local.backup_location}"
+      "vzdump ${var.vm_id} --mode stop --dumpdir ${local.backup_location}",
     ]
-    #  "vzdump ${var.vm_id} --mode stop --compress gzip --dumpdir ${local.backup_location}",
+    #   "vzdump ${var.vm_id} --mode stop --compress gzip --dumpdir ${local.backup_location}",
   }
 
   provisioner "remote-exec" {
@@ -76,7 +76,6 @@ resource "terraform_data" "shutdown_guest_and_backup" {
     ]
     #   "BKFILE=$(basename -s .gz $(ls *.gz))",
     #   "gzip -dk $${BKFILE}.gz",
-    #   "mv -v $${BKFILE} ${local.ct_created_template_basename}.tar",
   }
 
   # provisioner "remote-exec" {

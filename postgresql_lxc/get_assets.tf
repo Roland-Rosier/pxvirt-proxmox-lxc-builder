@@ -11,7 +11,6 @@ locals {
 
   ct_template_name_loc            = "${local.ct_containers_loc}/${local.ct_template_name}"
   ct_created_template_t_loc       = "${local.backup_location}/${local.ct_created_template_tar}"
-
 }
 
 resource "terraform_data" "extract_files" {
@@ -30,6 +29,9 @@ resource "terraform_data" "extract_files" {
     command        = "rm -rf ${var.asset_path}; mkdir -p ${var.asset_path}"
   }
 
+      # scp -i ~/.ssh/id_ed25519 -v root@${var.iac_host_ip}:${local.ct_containers_loc}/${local.ct_template_name} ${var.asset_path}/
+      ## scp -i ~/.ssh/id_ed25519 -v root@${var.iac_host_ip}:${local.ct_containers_loc}/${local.ct_created_template_name} ${var.asset_path}/
+      # scp -i ~/.ssh/id_ed25519 -v root@${var.iac_host_ip}:${local.ct_containers_loc}/${local.ct_created_template_tar} ${var.asset_path}/
   provisioner "local-exec" {
     command        = <<-EOT
       scp -i ~/.ssh/id_ed25519 -v root@${var.iac_host_ip}:${local.ct_template_name_loc} ${var.asset_path}/
@@ -48,14 +50,13 @@ resource "terraform_data" "extract_files" {
     working_dir    = var.asset_path
   }
 
-  provisioner "local-exec" {
-    command        = <<-EOT
+   provisioner "local-exec" {
+     command        = <<-EOT
       cp -v ${local.ct_created_template_basename}.tar ${local.ct_created_template_basename}-e.tar
       xz -9eT +1 ${local.ct_created_template_basename}-e.tar
-    EOT
+     EOT
     working_dir    = var.asset_path
-    # interpreter    = [ "/bin/bash", "-c" ]
-  }
+   }
 
   provisioner "local-exec" {
     command        = <<-EOT
@@ -63,7 +64,7 @@ resource "terraform_data" "extract_files" {
       mkdir -p tmp
       cp ${local.ct_created_template_name} tmp
       cp ${local.ct_created_template_basename}-e.tar.xz tmp
-    EOT
+     EOT
     working_dir    = var.asset_path
   }
 
@@ -72,10 +73,10 @@ resource "terraform_data" "extract_files" {
       FS_O=$(stat --format=%s ${local.ct_created_template_name})
       FS_E=$(stat --format=%s ${local.ct_created_template_basename}-e.tar.xz)
       if [ "$${FS_E}" -lt "$${FS_O}" ] ; then mv -fv ${local.ct_created_template_basename}-e.tar.xz ${local.ct_created_template_name} ; fi
-    EOT 
+    EOT
       # "mv -fv ${local.ct_created_template_name} ../"
     working_dir    = var.asset_path
-  }
+   }
 
   provisioner "local-exec" {
     command        = <<-EOT
@@ -89,7 +90,6 @@ resource "terraform_data" "extract_files" {
   #   when           = destroy
   #   command        = "rm -rf created"
   # }
-
 }
 
 resource "proxmox_virtual_environment_file" "ct_template" {

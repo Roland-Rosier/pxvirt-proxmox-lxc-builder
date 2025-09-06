@@ -15,15 +15,17 @@ locals {
   }))
 
   # Create the CT template name that we are looking for
-  ct_template_name                = chomp(templatefile("${path.module}/ct_template_name.tftpl", {
+  ct_template_basename            = chomp(templatefile("${path.module}/ct_template_name.tftpl", {
     containers_dist_name          = var.containers_dist_name
     containers_release_name       = var.containers_release_name
     containers_arch_name          = var.containers_arch_name
     containers_variant_name       = var.containers_variant_name
     containers_date               = var.containers_date
     containers_lxc_name           = var.containers_lxc_name
-    containers_lxc_name_extension = var.containers_lxc_name_extension
+    containers_lxc_name_extension = ""
   }))
+
+  ct_template_name                = "${local.ct_template_basename}${var.containers_lxc_name_extension}"
 
   # Create the storage name of the provisioning snippet
   stored_provision_snippet        = "${var.target_name}-${var.provision_script_base_name}"
@@ -33,13 +35,6 @@ locals {
     template_storage_location     = var.template_storage_location
     template_storage              = var.template_storage
     snippet_name                  = local.stored_provision_snippet
-  }))
-
-  # Define the location where the backup processing is performed
-  backup_location = chomp(templatefile("${path.module}/download_base_image_loc.tftpl", {
-    template_storage_location     = var.template_storage_location
-    template_storage              = var.template_storage
-    ct_template_name              = var.vm_id
   }))
 
   # Calculate today's date
@@ -56,7 +51,7 @@ locals {
     containers_lxc_name_extension = ""
   }))
 
-  ct_created_template_name        = "${local.ct_created_template_basename}.tar.xz"
+  ct_created_template_name        = "${local.ct_created_template_basename}${var.containers_lxc_name_extension}"
 
   # Note, possibly the templatestring function would be more appropriate:
   # https://developer.hashicorp.com/terraform/language/functions/templatestring
@@ -209,84 +204,6 @@ resource "terraform_data" "transfer_files_to_guest" {
       "pct push ${var.vm_id} ${local.stored_provision_snippet_path} /tmp/provision_lxc.sh -perms 4700",
       "pct exec ${var.vm_id} /tmp/provision_lxc.sh",
       "pct exec ${var.vm_id} -- bash -c 'rm -f /tmp/provision_lxc.sh'"      
-    ]
-  }
-
-}
-
-resource "terraform_data" "shutdown_guest_and_backup" {
-
-  triggers_replace = [
-    terraform_data.transfer_files_to_guest.id,
-  ]
-
-  # Remote exec probably won't work in guest because there is no SSH in guest
-  # so use remote exec on host and pct
-  connection {
-    type           = "ssh"
-    user           = "root"
-    private_key    = file("~/.ssh/id_ed25519")
-    host           = var.iac_host_ip
-  }
-
-  # Split these commands up to try and reduce the potential for
-  # timeouts with multiple long compression calls
-
-  provisioner "remote-exec" {
-    inline         = [
-      "#!/bin/bash",
-      "pct shutdown ${var.vm_id}",
-      "lxc-wait --name=${var.vm_id} --state=STOPPED",
-      "mkdir -p ${local.backup_location}",
-      "rm -f ${local.backup_location}/*",
-      "vzdump ${var.vm_id} --mode stop --compress gzip --dumpdir ${local.backup_location}",
-    ]
-  }
-
-  provisioner "remote-exec" {
-    inline         = [
-      "#!/bin/bash",
-      "pushd ${local.backup_location}",
-      "pwd",
-      "BKFILE=$(basename -s .gz $(ls *.gz))",
-      "gzip -dk $${BKFILE}.gz",
-      "mv -v $${BKFILE} ${local.ct_created_template_basename}.tar",
-      "popd",
-    ]
-  }
-
-  provisioner "remote-exec" {
-    inline         = [
-      "#!/bin/bash",
-      "pushd ${local.backup_location}",
-      "pwd",
-      "xz -9kT 0 ${local.ct_created_template_basename}.tar",
-      "popd",
-    ]
-  }
-
-  provisioner "remote-exec" {
-    inline         = [
-      "#!/bin/bash",
-      "pushd ${local.backup_location}",
-      "pwd",
-      "cp -v ${local.ct_created_template_basename}.tar ${local.ct_created_template_basename}-e.tar",
-      "xz -9ekT 0 ${local.ct_created_template_basename}-e.tar",
-      "popd",
-    ]
-  }
-
-  provisioner "remote-exec" {
-    inline         = [
-      "#!/bin/bash",
-      "pushd ${local.backup_location}",
-      "pwd",
-      "FS_O=$(stat --format=%s ${local.ct_created_template_name})",
-      "FS_E=$(stat --format=%s ${local.ct_created_template_basename}-e.tar.xz)",
-      "if [ \"$${FS_E}\" -lt \"$${FS_O}\" ] ; then mv -fv ${local.ct_created_template_basename}-e.tar.xz ${local.ct_created_template_name} ; fi",
-      "mv -fv ${local.ct_created_template_name} ../",
-      "popd",
-      "rm -rf ${local.backup_location}"
     ]
   }
 

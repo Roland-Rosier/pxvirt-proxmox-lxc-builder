@@ -71,9 +71,7 @@ resource "terraform_data" "test_vm" {
   provisioner "remote-exec" {
     inline         = [
       "#!/bin/bash",
-      "echo Hello World!",
-      "ansible --version",
-      "tofu --version"
+      "echo Hello World!"
     ]
   }
 }
