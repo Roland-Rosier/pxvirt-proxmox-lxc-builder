@@ -13,8 +13,7 @@ resource "terraform_data" "prep_for_backup" {
     terraform_data.install_packages.id
   ]
 
-  # Remote exec probably won't work in guest because there is no SSH in guest
-  # so use remote exec on host and pct
+  # Remote exec on commands on target
   connection {
     type           = "ssh"
     user           = "root"
@@ -27,8 +26,6 @@ resource "terraform_data" "prep_for_backup" {
       "#!/bin/bash",
       "rm -f /etc/ssh/ssh_host_*",
       "sync",
-      "sleep 1s",
-      "passwd -ld root",
       "sleep 1s",
       "truncate -s 0 /etc/machine-id",
       "sleep 1s",
@@ -63,8 +60,9 @@ resource "terraform_data" "shutdown_guest_and_backup" {
       "lxc-wait --name=${var.vm_id} --state=STOPPED",
       "mkdir -p ${local.backup_location}",
       "rm -f ${local.backup_location}/*",
-      "vzdump ${var.vm_id} --mode stop --compress gzip --dumpdir ${local.backup_location}",
+      "vzdump ${var.vm_id} --mode stop --dumpdir ${local.backup_location}"
     ]
+    #  "vzdump ${var.vm_id} --mode stop --compress gzip --dumpdir ${local.backup_location}",
   }
 
   provisioner "remote-exec" {
@@ -72,46 +70,48 @@ resource "terraform_data" "shutdown_guest_and_backup" {
       "#!/bin/bash",
       "pushd ${local.backup_location}",
       "pwd",
-      "BKFILE=$(basename -s .gz $(ls *.gz))",
-      "gzip -dk $${BKFILE}.gz",
+      "BKFILE=$(ls *.tar)",
       "mv -v $${BKFILE} ${local.ct_created_template_basename}.tar",
-      "popd",
+      "popd"
     ]
+    #   "BKFILE=$(basename -s .gz $(ls *.gz))",
+    #   "gzip -dk $${BKFILE}.gz",
+    #   "mv -v $${BKFILE} ${local.ct_created_template_basename}.tar",
   }
 
-  provisioner "remote-exec" {
-    inline         = [
-      "#!/bin/bash",
-      "pushd ${local.backup_location}",
-      "pwd",
-      "xz -9kT 0 ${local.ct_created_template_basename}.tar",
-      "popd",
-    ]
-  }
+  # provisioner "remote-exec" {
+  #   inline         = [
+  #     "#!/bin/bash",
+  #     "pushd ${local.backup_location}",
+  #     "pwd",
+  #     "xz -9kT 0 ${local.ct_created_template_basename}.tar",
+  #     "popd",
+  #   ]
+  # }
 
-  provisioner "remote-exec" {
-    inline         = [
-      "#!/bin/bash",
-      "pushd ${local.backup_location}",
-      "pwd",
-      "cp -v ${local.ct_created_template_basename}.tar ${local.ct_created_template_basename}-e.tar",
-      "xz -9ekT 0 ${local.ct_created_template_basename}-e.tar",
-      "popd",
-    ]
-  }
+  # provisioner "remote-exec" {
+  #   inline         = [
+  #     "#!/bin/bash",
+  #     "pushd ${local.backup_location}",
+  #     "pwd",
+  #     "cp -v ${local.ct_created_template_basename}.tar ${local.ct_created_template_basename}-e.tar",
+  #     "xz -9ekT 0 ${local.ct_created_template_basename}-e.tar",
+  #     "popd",
+  #   ]
+  # }
 
-  provisioner "remote-exec" {
-    inline         = [
-      "#!/bin/bash",
-      "pushd ${local.backup_location}",
-      "pwd",
-      "FS_O=$(stat --format=%s ${local.ct_created_template_name})",
-      "FS_E=$(stat --format=%s ${local.ct_created_template_basename}-e.tar.xz)",
-      "if [ \"$${FS_E}\" -lt \"$${FS_O}\" ] ; then mv -fv ${local.ct_created_template_basename}-e.tar.xz ${local.ct_created_template_name} ; fi",
-      "mv -fv ${local.ct_created_template_name} ../",
-      "popd",
-      "rm -rf ${local.backup_location}"
-    ]
-  }
+  # provisioner "remote-exec" {
+  #   inline         = [
+  #     "#!/bin/bash",
+  #     "pushd ${local.backup_location}",
+  #     "pwd",
+  #     "FS_O=$(stat --format=%s ${local.ct_created_template_name})",
+  #     "FS_E=$(stat --format=%s ${local.ct_created_template_basename}-e.tar.xz)",
+  #     "if [ \"$${FS_E}\" -lt \"$${FS_O}\" ] ; then mv -fv ${local.ct_created_template_basename}-e.tar.xz ${local.ct_created_template_name} ; fi",
+  #     "mv -fv ${local.ct_created_template_name} ../",
+  #     "popd",
+  #     "rm -rf ${local.backup_location}"
+  #   ]
+  # }
 
 }

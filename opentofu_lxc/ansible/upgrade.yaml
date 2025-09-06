@@ -11,7 +11,8 @@
   hosts: localhost
   connection: local
   become: true
-
+  vars_files:
+    - tf_ansible_vars_file.yml
   vars:
     # NOTE:
     # ssh-keyscan does not seem to operate consistently
@@ -28,7 +29,10 @@
     # ssh_known_hosts_file: "{{ '~/.ssh/known_hosts' }}"
     # ssh_known_hosts: "{{ groups['all'] }}"
     # ssh_known_hosts: "{{ groups['test_servers'] | map('extract', hostvars, ['ansible_host']) | join(',') }}"
-    ssh_known_hosts: [ '192.168.177.42' ]
+    # ssh_known_hosts: [ '192.168.177.42' ]
+    # ssh_known_hosts: [ '{{ tf_ansible_build_host_var }}' ]
+    known_host_1: "{{ tf_ansible_build_host_var }}"
+    ssh_known_hosts: [ "{{ known_host_1 }}" ]
 
   tasks:
     - name: For each hosts, scan for its ssh public key
@@ -68,9 +72,12 @@
 #      ansible.builtin.shell: ssh-keyscan -T 10 192.168.177.42 >> ~/.ssh/known_hosts
 ##      register: keyscan_key
 
-- hosts: server
+- name: Update all packages
+  hosts: server
   become: true
   become_user: root
+  vars_files:
+    - tf_ansible_vars_file.yml
   tasks:
     - name: Upgrade apt repo and cache on Debian box
       when: ansible_os_family == "Debian"
@@ -82,6 +89,7 @@
       when: ansible_os_family == "Debian"
       apt:
         name:
+          - xz-utils
           - zip
           - jq
     - name: Check if a reboot is required
@@ -89,7 +97,7 @@
       stat: path=/var/run/reboot-required get_checksum=false
     - name: Reboot the box if kernel updated
       reboot:
-        msg: "Reboot initiated by Ansible for kernel updates"
+        msg: "Reboot initiated for kernel updates after APT updates"
         connect_timeout: 5
         reboot_timeout: 90
         pre_reboot_delay: 0
@@ -97,9 +105,12 @@
         test_command: uptime
       when: reboot_required_file.stat.exists
 
-- hosts: server
+- name: Add Ansible
+  hosts: server
   become: true
   become_user: root
+  vars_files:
+    - tf_ansible_vars_file.yml
   tasks:
     - name: Retrieve Ansible key and add repo
       when: ansible_os_family == "Debian"
@@ -133,9 +144,12 @@
         test_command: uptime
       when: reboot_required_file.stat.exists
 
-- hosts: server
+- name: Add OpenTofu
+  hosts: server
   become: true
   become_user: root
+  vars_files:
+    - tf_ansible_vars_file.yml
   tasks:
     - name: Retrieve OpenTofu key and add repo
       when: ansible_os_family == "Debian"
@@ -170,7 +184,7 @@
               - tofu
         - name: Reboot the box if kernel updated
           reboot:
-            msg: "Reboot initiated by Ansible for kernel updates"
+            msg: "Reboot initiated by OpenTofu for kernel updates"
             connect_timeout: 5
             reboot_timeout: 90
             pre_reboot_delay: 0
@@ -178,9 +192,12 @@
             test_command: uptime
           when: reboot_required_file.stat.exists
 
-- hosts: server
+- name: Tîdy up
+  hosts: server
   become: true
   become_user: root
+  vars_files:
+    - tf_ansible_vars_file.yml
   tasks:
     - name: Tidy up after yourself
       when: ansible_os_family == "Debian"
@@ -191,7 +208,7 @@
             autoremove: true
         - name: Reboot the box if kernel updated
           reboot:
-            msg: "Reboot initiated by Ansible for kernel updates"
+            msg: "Reboot initiated by kernel after APT updates"
             connect_timeout: 5
             reboot_timeout: 90
             pre_reboot_delay: 0

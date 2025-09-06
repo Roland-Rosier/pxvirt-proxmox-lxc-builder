@@ -93,7 +93,7 @@ resource "terraform_data" "wait_for_guest_to_start" {
     proxmox_lxc.my_lxc.id
   ]
 
-  # Remote exec probably won't work in guest because there is no SSH in guest
+  # Remote exec probably won't work in guest because SSH is not yet running in guest
   # so use remote exec on host and pct
   connection {
     type           = "ssh"
@@ -102,13 +102,6 @@ resource "terraform_data" "wait_for_guest_to_start" {
     host           = var.iac_host_ip
   }
 
-  # Split these commands up to try and reduce the potential for
-  # timeouts with multiple long compression calls
-
-#      "pct shutdown ${var.vm_id}",
-#      "mkdir -p ${local.backup_location}",
-#      "rm -f ${local.backup_location}/*",
-#      "vzdump ${var.vm_id} --mode stop --compress gzip --dumpdir ${local.backup_location}",
   provisioner "remote-exec" {
     inline         = [
       "#!/bin/bash",
@@ -119,12 +112,31 @@ resource "terraform_data" "wait_for_guest_to_start" {
   }
 }
 
+resource "local_file" "tf_ansible_vars_file" {
+
+  depends_on = [
+    terraform_data.wait_for_guest_to_start
+  ]
+
+  # triggers_replace = [
+  #   terraform_data.wait_for_guest_to_start.id
+  # ]
+
+  content = <<-DOC
+    # Ansible vars generated containing variable values from Tofu
+
+    tf_ansible_build_host_var: ${var.vm_ipv4}
+  DOC
+  filename = "./ansible/tf_ansible_vars_file.yml"
+}
+
 resource "terraform_data" "install_packages" {
 
   triggers_replace = [
     # timestamp()
     # proxmox_lxc.my_lxc.id
-    terraform_data.wait_for_guest_to_start.id
+    # terraform_data.wait_for_guest_to_start.id
+    local_file.tf_ansible_vars_file.id
   ]
 
   provisioner "local-exec" {

@@ -7,7 +7,8 @@ locals {
 
 resource "tls_private_key" "ssh" {
   depends_on       = [
-    terraform_data.shutdown_guest_and_backup
+    # terraform_data.shutdown_guest_and_backup
+    proxmox_virtual_environment_file.ct_template
   ]
   algorithm = "ED25519"
 }

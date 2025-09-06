@@ -6,6 +6,7 @@ terraform {
       source          = "Telmate/proxmox"
       version         = "3.0.2-rc03"
     }
+    # From: https://registry.terraform.io/providers/bpg/proxmox/latest
     proxmox-ot = {
       source          = "bpg/proxmox"
       version         = "0.81.0"
