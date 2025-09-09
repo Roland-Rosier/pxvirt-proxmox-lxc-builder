@@ -1,0 +1,24 @@
+---
+- name: Tidy up
+  hosts: server
+  become: true
+  become_user: root
+  vars_files:
+    - tf_ansible_vars_file.yml
+  tasks:
+    - name: Tidy up after yourself
+      when: ansible_os_family == "Debian"
+      block:
+        - name: apt clean and autoremove
+          ansible.builtin.apt:
+            clean: true
+            autoremove: true
+        - name: Reboot the box if kernel updated
+          reboot:
+            msg: "Reboot initiated by kernel after APT updates"
+            connect_timeout: 5
+            reboot_timeout: 90
+            pre_reboot_delay: 0
+            post_reboot_delay: 30
+            test_command: uptime
+          when: reboot_required_file.stat.exists

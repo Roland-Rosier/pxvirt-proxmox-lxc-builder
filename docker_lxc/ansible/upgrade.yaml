@@ -1,0 +1,168 @@
+---
+# - hosts: server
+#   gather_facts: no
+#   tasks:
+#     - name: Wait for the system to become reacable
+#       ansible.builtin.wait_for_connection:
+#     - name: Gather facts for the first time
+#       ansible.builtin.setup:
+
+- name: Update known_hosts file
+  hosts: localhost
+  connection: local
+  become: true
+  vars_files:
+    - tf_ansible_vars_file.yml
+  vars:
+    # NOTE:
+    # ssh-keyscan does not seem to operate consistently
+    # - The timeout parameter doesn't seem to work reliably
+    # - Some variants of ssh-keyscan output the comments on stderr *and don't have a -q parameter*
+    # - Some variants of ssh-keyscan output the comments on stdout *and do have a -q parameter to suppress comments*
+    # - But the variants which output comments on stderr fail if "-q" is passed as a parameter
+    # So the only way to deal with this difference is to pipe stderr to /dev/null in case that is the variant\
+    # and at least that command succeeds with no errors coming through on stderr
+    # ssh_known_hosts_command: "ssh-keyscan -T 30"
+    # ssh_known_hosts_command: "ssh-keyscan -q -4"
+    ssh_known_hosts_command: "ssh-keyscan -4"
+    ssh_known_hosts_file: "{{ lookup('env', 'HOME') + '/.ssh/known_hosts' }}"
+    # ssh_known_hosts: "{{ groups['all'] }}"
+    # ssh_known_hosts: "{{ groups['test_servers'] | map('extract', hostvars, ['ansible_host']) | join(',') }}"
+    # ssh_known_hosts: [ '{{ tf_ansible_build_host_var }}' ]
+    known_host_1: "{{ tf_ansible_build_host_var }}"
+    ssh_known_hosts: [ "{{ known_host_1 }}" ]
+
+  tasks:
+    - name: For each hosts, scan for its ssh public key
+      # ansible.builtin.shell: "{{ ssh_known_hosts_command }} {{ item }},`dig +short {{ item }}`"
+      # ansible.builtin.shell: "{{ ssh_known_hosts_command }} {{ item }}"
+      ansible.builtin.shell: "count=0 && while [[ $count -lt 10 ]] ; do {{ ssh_known_hosts_command }} {{ item }} 2> /dev/null && break; count=$((count+1)); done"
+      with_items: "{{ ssh_known_hosts }}"
+      register: ssh_known_host_results
+      ignore_errors: true
+      changed_when: false
+      args:
+        executable: /bin/bash
+
+    - name: Add/update the public key in the '{{ ssh_known_hosts_file }}'
+      ansible.builtin.known_hosts:
+        name: "{{ item.item }}"
+        key: "{{ item.stdout }}"
+        path: "{{ ssh_known_hosts_file }}"
+      with_items: "{{ ssh_known_host_results.results }}"
+
+- name: Include play to upgrade all packages and install misc
+  ansible.builtin.import_playbook: upgrade_all_install_misc.yaml
+
+# - name: Update all packages
+#   hosts: server
+#   become: true
+#   become_user: root
+#   vars_files:
+#     - tf_ansible_vars_file.yml
+#   tasks:
+#     - name: Upgrade apt repo and cache on Debian box
+#       when: ansible_os_family == "Debian"
+#       apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+#     - name: Upgrade all packages on Debian servers
+#       when: ansible_os_family == "Debian"
+#       apt: upgrade=yes force_apt_get=yes
+#     # - name: Install other misc packages
+#     #   when: ansible_os_family == "Debian"
+#     #   apt:
+#     #     name:
+#     #       - zip
+#     #       - jq
+#     - name: Check if a reboot is required
+#       register: reboot_required_file
+#       stat: path=/var/run/reboot-required get_checksum=false
+#     - name: Reboot the box if kernel updated
+#       reboot:
+#         msg: "Reboot initiated for kernel updates after APT updates"
+#         connect_timeout: 5
+#         reboot_timeout: 90
+#         pre_reboot_delay: 0
+#         post_reboot_delay: 30
+#         test_command: uptime
+#       when: reboot_required_file.stat.exists
+
+- name: Include play to install Docker
+  ansible.builtin.import_playbook: install_docker.yaml
+
+# - name: Add PostgreSQL
+#   hosts: server
+#   become: true
+#   become_user: root
+#   vars_files:
+#     - tf_ansible_vars_file.yml
+#   tasks:
+#     # - name: Retrieve PostgreSQL key and add repo
+#     #   when: ansible_os_family == "Debian"
+#     #   block:
+#     #     - name: Retrieve PostgreSQL apt-key
+#     #       ansible.builtin.get_url:
+#     #         url: https://keyserver.ubuntu.com/pks/lookup?fingerprint=on&op=get&search=0x6125E2A8C77F2818FB7BD15B93C4A3FD7BB9C367
+# # It appears from https://github.com/ansible/ansible/issues/78063#issuecomment-1210837515 that apt
+# # will accept these files without dearmoring them, as long as the extension is .asc
+#     #         dest: /etc/apt/keyrings/ansible-archive-keyring.asc
+#     #         mode: '0644'
+#     #         force: true
+#     #     - name: Add PostgreSQL repository to apt
+# # For Debian 12, use the Ubuntu codename of jammy to get the latest distribution
+#     #       ansible.builtin.apt_repository:
+#     #         repo: "deb [signed-by=/etc/apt/keyrings/ansible-archive-keyring.asc] http://ppa.launchpad.net/ansible/ansible/ubuntu jammy main"
+#     - name: Update apt cache and install PostgreSQL
+#       when: ansible_os_family == "Debian"
+#       block:
+#         - name: Update apt cache with any new repository
+#           apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+#         - name: Install PostgreSQL 15 + dependencies
+#           apt:
+#             name:
+#               - libecpg-dev
+#               - libpq-dev
+#               - postgresql-common
+#               - postgresql-server-dev-all
+#               - postgresql-15
+#               - postgresql-plperl-15
+#               - postgresql-plpython3-15
+#               - postgresql-pltcl-15
+#     - name: Reboot the box if kernel updated
+#       reboot:
+#         msg: "Reboot initiated by PostgreSQL for kernel updates"
+#         connect_timeout: 5
+#         reboot_timeout: 90
+#         pre_reboot_delay: 0
+#         post_reboot_delay: 30
+#         test_command: uptime
+#       when: reboot_required_file.stat.exists
+
+- name: Include play to update os-release
+  ansible.builtin.import_playbook: update_os_release.yaml
+
+- name: Include play to tidy up
+  ansible.builtin.import_playbook: tidy_up.yaml
+
+# - name: Tidy up
+#   hosts: server
+#   become: true
+#   become_user: root
+#   vars_files:
+#     - tf_ansible_vars_file.yml
+#   tasks:
+#     - name: Tidy up after yourself
+#       when: ansible_os_family == "Debian"
+#       block:
+#         - name: apt clean and autoremove
+#           ansible.builtin.apt:
+#             clean: true
+#             autoremove: true
+#         - name: Reboot the box if kernel updated
+#           reboot:
+#             msg: "Reboot initiated by kernel after AFT updates"
+#             connect_timeout: 5
+#             reboot_timeout: 90
+#             pre_reboot_delay: 0
+#             post_reboot_delay: 30
+#             test_command: uptime
+#           when: reboot_required_file.stat.exists

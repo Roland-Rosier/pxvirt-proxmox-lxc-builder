@@ -121,6 +121,28 @@
               - postgresql-plperl-15
               - postgresql-plpython3-15
               - postgresql-pltcl-15
+        - name: Stop and disable the PostgreSQL service
+          ansible.builtin.systemd_service:
+            name: postgresql
+            state: stopped
+            enabled: false
+        - name: Insert include_if_exists into pg_hba.conf
+          ansible.builtin.lineinfile:
+            path: /etc/postgresql/15/main/pg_hba.conf
+            state: present
+            insertafter: '# configuration parameter, or via the -i or -h command line switches.'
+            line: 'include_if_exists    /var/lib/postgresql/main/pg_hba_inc.conf'
+        - name: Insert include_if_exists into postgresql.conf
+          ansible.builtin.lineinfile:
+            path: /etc/postgresql/15/main/postgresql.conf
+            state: present
+            insertafter: "#include = '\\.\\.\\.'                        # include file"
+            line: "include_if_exists = '/var/lib/postgresql/main/postgresql_inc.conf'"
+        - name: Tar the original directory up so that it can be untarred into a fresh drive
+          ansible.builtin.shell:
+            chdir: /var/lib
+            creates: /var/lib/postgresql_orig.tar
+            cmd: tar -cvf postgresql_orig.tar postgresql/
     - name: Reboot the box if kernel updated
       reboot:
         msg: "Reboot initiated by PostgreSQL for kernel updates"
@@ -130,6 +152,26 @@
         post_reboot_delay: 30
         test_command: uptime
       when: reboot_required_file.stat.exists
+
+- name: Update /usr/lib/os-release
+  hosts: server
+  become: true
+  become_user: root
+  vars_files:
+    - tf_ansible_vars_file.yml
+  tasks:
+    - name: Update image id
+      when: ansible_os_family == "Debian"
+      ansible.builtin.replace:
+        path: /usr/lib/os-release
+        regexp: '^(\s*)IMAGE_ID=("\S+")'
+        replace: '\1IMAGE_ID="{{ tf_ansible_build_variant_name }}"'
+    - name: Update build date
+      when: ansible_os_family == "Debian"
+      ansible.builtin.replace:
+        path: /usr/lib/os-release
+        regexp: '^(\s*)IMAGE_VERSION="([^-]*)-([^"]*)"'
+        replace: '\1IMAGE_VERSION="\2-{{ tf_ansible_today_date }}"'
 
 - name: Tidy up
   hosts: server
