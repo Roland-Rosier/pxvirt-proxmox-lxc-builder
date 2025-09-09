@@ -45,7 +45,7 @@ locals {
     containers_dist_name          = var.containers_dist_name
     containers_release_name       = var.containers_release_name
     containers_arch_name          = var.containers_arch_name
-    containers_variant_name       = "${var.containers_variant_name}-base"
+    containers_variant_name       = "${var.containers_variant_name}-${var.this_build_variant_name}"
     containers_date               = "${var.containers_date}-${local.today_date}"
     containers_lxc_name           = var.containers_lxc_name
     containers_lxc_name_extension = ""
@@ -99,76 +99,144 @@ resource "proxmox_lxc" "my_lxc" {
   }
 }
 
-resource "terraform_data" "create_files" {
+resource "local_file" "create_files" {
 
-  triggers_replace = [
-    # timestamp()
-    proxmox_lxc.my_lxc.id
+  depends_on = [
+    proxmox_lxc.my_lxc
   ]
 
-  provisioner "local-exec" {
-    command        = "mkdir -p 'created'"
-  }
+  filename = "created/${var.provision_script_base_name}"
 
-  provisioner "local-exec" {
-    command        = <<-EOT
-      cat > created/${var.provision_script_base_name} <<-CONFIG
-      #!/bin/bash
-      # Note - not using #!/usr/bin/env due to increased security risk
-      set -euo pipefail
-      cat > /etc/sysctl.d/10-disable-ipv6.conf <<-EOF
-      # Disable ipv6
-      net.ipv6.conf.all.disable_ipv6 = 1
-      net.ipv6.conf.default.disable_ipv6 = 1
-      EOF
-      sysctl -p
-      service procps force-reload
+  content = <<-EOT
+    #!/bin/bash
+    # Note - not using #!/usr/bin/env due to increased security risk
+    set -euo pipefail
+    cat > /etc/sysctl.d/10-disable-ipv6.conf <<-EOF
+    # Disable ipv6
+    net.ipv6.conf.all.disable_ipv6 = 1
+    net.ipv6.conf.default.disable_ipv6 = 1
+    EOF
+    sysctl -p
+    service procps force-reload
 
-      cat > /etc/systemd/network/eth0.network <<-EOF
-      ${var.nic_name}.network
-      [Match]
-      Name=${var.nic_name}
+    cat > /etc/systemd/network/eth0.network <<-EOF
+    ${var.nic_name}.network
+    [Match]
+    Name=${var.nic_name}
 
-      [Network]
-      Address=${var.vm_ipv4_cidr}
-      Gateway=${var.vm_gw4}
-      DNS=${var.vm_nameserver}
-      EOF
-      systemctl restart systemd-networkd
+    [Network]
+    Address=${var.vm_ipv4_cidr}
+    Gateway=${var.vm_gw4}
+    DNS=${var.vm_nameserver}
+    EOF
+    systemctl restart systemd-networkd
 
-      sync
-      sleep 1s
+    sync
+    sleep 1s
 
-      apt-get update && apt-get upgrade -y && apt-get install -y ifupdown2 ssh screen tmux
-      apt clean && apt autoremove
+    apt-get update && apt-get upgrade -y && apt-get install -y ifupdown2 ssh screen tmux
+    apt clean && apt autoremove
 
-      systemctl stop systemd-networkd.socket systemd-networkd.service
-      systemctl disable systemd-networkd.socket systemd-networkd.service
-      systemctl mask systemd-networkd.socket systemd-networkd.service
+    sync
+    sleep 1s
 
-      rm -f /etc/ssh/ssh_host_*
+    cat >> /usr/lib/os-release <<-EOF
+    VARIANT="LXC Container Image created from default image from https://images.linuxcontainers.org/"
+    ARCHITECTURE="arm64"
+    IMAGE_ID="${var.this_build_variant_name}"
+    IMAGE_VERSION="${var.containers_date}-${local.today_date}"
+    EOF
 
-      sync
-      sleep 1s
+    sync
+    sleep 1s
 
-      truncate -s 0 /etc/machine-id
+    systemctl stop systemd-networkd.socket systemd-networkd.service
+    systemctl disable systemd-networkd.socket systemd-networkd.service
+    systemctl mask systemd-networkd.socket systemd-networkd.service
 
-      cat /dev/null > ~/.bash_history && history -c && history -w && exit 0
-      CONFIG
-    EOT
-  }
+    rm -f /etc/ssh/ssh_host_*
 
-  provisioner "local-exec" {
-    when           = destroy
-    command        = "rm -rf created"
-  }
+    sync
+    sleep 1s
+
+    truncate -s 0 /etc/machine-id
+
+    cat /dev/null > ~/.bash_history && history -c && history -w && exit 0
+  EOT
+
 }
+
+# resource "terraform_data" "create_files" {
+# 
+#   triggers_replace = [
+#     # timestamp()
+#     proxmox_lxc.my_lxc.id
+#   ]
+# 
+#   provisioner "local-exec" {
+#     command        = "mkdir -p 'created'"
+#   }
+# 
+#   provisioner "local-exec" {
+#     command        = <<-EOT
+#       cat > created/${var.provision_script_base_name} <<-CONFIG
+#       #!/bin/bash
+#       # Note - not using #!/usr/bin/env due to increased security risk
+#       set -euo pipefail
+#       cat > /etc/sysctl.d/10-disable-ipv6.conf <<-EOF
+#       # Disable ipv6
+#       net.ipv6.conf.all.disable_ipv6 = 1
+#       net.ipv6.conf.default.disable_ipv6 = 1
+#       EOF
+#       sysctl -p
+#       service procps force-reload
+# 
+#       cat > /etc/systemd/network/eth0.network <<-EOF
+#       ${var.nic_name}.network
+#       [Match]
+#       Name=${var.nic_name}
+# 
+#       [Network]
+#       Address=${var.vm_ipv4_cidr}
+#       Gateway=${var.vm_gw4}
+#       DNS=${var.vm_nameserver}
+#       EOF
+#       systemctl restart systemd-networkd
+# 
+#       sync
+#       sleep 1s
+# 
+#       apt-get update && apt-get upgrade -y && apt-get install -y ifupdown2 ssh screen tmux
+#       apt clean && apt autoremove
+# 
+#       systemctl stop systemd-networkd.socket systemd-networkd.service
+#       systemctl disable systemd-networkd.socket systemd-networkd.service
+#       systemctl mask systemd-networkd.socket systemd-networkd.service
+# 
+#       rm -f /etc/ssh/ssh_host_*
+# 
+#       sync
+#       sleep 1s
+# 
+#       truncate -s 0 /etc/machine-id
+# 
+#       cat /dev/null > ~/.bash_history && history -c && history -w && exit 0
+#       CONFIG
+#     EOT
+#   }
+# 
+#   provisioner "local-exec" {
+#     when           = destroy
+#     command        = "rm -rf created"
+#   }
+# }
 
 # https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_file
 resource "proxmox_virtual_environment_file" "transfer_files_to_host" {
   provider         = proxmox-ot
   depends_on       = [
-    terraform_data.create_files,
+    # terraform_data.create_files,
+    local_file.create_files,
     proxmox_lxc.my_lxc
   ]
   content_type     = "snippets"

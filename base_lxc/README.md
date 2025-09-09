@@ -15,8 +15,8 @@ That is what this [Tofu](https://opentofu.org/) build does:
 
 To create the image, setup the variable files as desired and run the command:
 
-'''console
+```console
 $ tofu init
 $ TF_VAR_root_password='' tofu plan --var-file="ip_addrs.tfvars"
 $ TF_VAR_root_password='' tofu apply -var-file="ip_addrs.tfvars"
-'''
+```

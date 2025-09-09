@@ -1,0 +1,20 @@
+---
+- name: Update /usr/lib/os-release
+  hosts: server
+  become: true
+  become_user: root
+  vars_files:
+    - tf_ansible_vars_file.yml
+  tasks:
+    - name: Update image id
+      when: ansible_os_family == "Debian"
+      ansible.builtin.replace:
+        path: /usr/lib/os-release
+        regexp: '^(\s*)IMAGE_ID=("\S+")'
+        replace: '\1IMAGE_ID="{{ tf_ansible_build_variant_name }}"'
+    - name: Update build date
+      when: ansible_os_family == "Debian"
+      ansible.builtin.replace:
+        path: /usr/lib/os-release
+        regexp: '^(\s*)IMAGE_VERSION="([^-]*)-([^"]*)"'
+        replace: '\1IMAGE_VERSION="\2-{{ tf_ansible_today_date }}"'

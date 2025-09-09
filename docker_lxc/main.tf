@@ -122,13 +122,13 @@ resource "local_file" "tf_ansible_vars_file" {
   #   terraform_data.wait_for_guest_to_start.id
   # ]
 
-  content = <<-DOC
+  content = <<-EOT
     # Ansible vars generated containing variable values from Tofu
 
     tf_ansible_build_host_var: ${var.vm_ipv4}
     tf_ansible_build_variant_name: ${var.this_build_variant_name}
     tf_ansible_today_date: ${local.today_date}
-  DOC
+  EOT
   filename = "./ansible/tf_ansible_vars_file.yml"
 }
 

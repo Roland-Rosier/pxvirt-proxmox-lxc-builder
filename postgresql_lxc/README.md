@@ -8,8 +8,8 @@ This takes an base image modified from a Linux Container image and adds PostgreS
 At present it adds the version of PostgreSQL available in the standard Debian Bookworm:
 - PostgreSQL version 15
 
-'''console
+```console
 $ tofu init
 $ TF_VAR_root_password='' tofu plan --var-file="ip_addrs.tfvars"
 $ TF_VAR_root_password='' tofu apply -var-file="ip_addrs.tfvars"
-'''
+```

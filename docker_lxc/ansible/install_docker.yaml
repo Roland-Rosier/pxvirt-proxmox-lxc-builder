@@ -1,0 +1,75 @@
+---
+# See https://docs.docker.com/engine/install/debian/
+
+- name: Remove any previously vendor-installed Docker stuff
+  hosts: server
+  become: true
+  become_user: root
+  vars_files:
+    - tf_ansible_vars_file.yml
+  tasks:
+    - name: Uninstall all conficting packages
+      ansible.builtin.apt:
+        state: absent
+        purge: true
+        name:
+          - docker.io
+          - docker-doc
+          - docker-compose
+          - podman-docker
+          - containerd
+          - runc
+
+- name: Add Docker
+  hosts: server
+  become: true
+  become_user: root
+  vars_files:
+    - tf_ansible_vars_file.yml
+  tasks:
+    - name: Retrieve Docker key and add repo
+      when: ansible_os_family == "Debian"
+      block:
+        - name: Retrieve Docker apt-key
+          ansible.builtin.get_url:
+            url: https://download.docker.com/linux/debian/gpg
+# It appears from https://github.com/ansible/ansible/issues/78063#issuecomment-1210837515 that apt
+# will accept these files without dearmoring them, as long as the extension is .asc
+            dest: /etc/apt/keyrings/docker.asc
+            mode: '0644'
+            force: true
+        - name: Add Docker repository to apt
+          ansible.builtin.apt_repository:
+            repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable"
+            filename: docker.list
+    - name: Update apt cache and install Docker
+      when: ansible_os_family == "Debian"
+      block:
+        - name: Update apt cache with any new repository
+          apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+        - name: Install Docker
+          apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-buildx-plugin
+              - docker-compose-plugin
+        - name: Stop and disable the Docker service
+          ansible.builtin.systemd_service:
+            name: docker
+            state: stopped
+            enabled: false
+        - name: Ensure that the "docker" group exists
+          ansible.builtin.group:
+            name: docker
+            state: present
+    - name: Reboot the box if kernel updated
+      reboot:
+        msg: "Reboot initiated by Docker for kernel updates"
+        connect_timeout: 5
+        reboot_timeout: 90
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: uptime
+      when: reboot_required_file.stat.exists

@@ -30,12 +30,12 @@ variable "containers_variant_name" {
 
 variable "containers_base_date" {
   type = string
-  default = "20250906"
+  default = "20250909"
 }
 
 variable "containers_update_date" {
   type = string
-  default = "20250906"
+  default = "20250909"
 }
 
 variable "this_build_variant_name" {

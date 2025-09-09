@@ -1,9 +1,11 @@
-# Tofu configuration to build an image containing Ansible and OpenTofu
+# Tofu configuration to build an image containing Docker
 
 The Linux Container images [https://images.linuxcontainers.org/](https://images.linuxcontainers.org/)
 rely on Cloud Init to be initialised and use systemd-networkd as the network settings manager.
 
-This takes an base image modified from a Linux Container image and adds Ansible and OpenTofu to it.
+This takes an base image modified from a Linux Container image and adds Docker to it.
+
+At present it adds the version of Docker available directly from Docker itself
 
 ```console
 $ tofu init
